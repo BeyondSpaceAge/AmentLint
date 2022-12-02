@@ -118,33 +118,30 @@ def main(argv=sys.argv[1:]):
     args.select = ','.join(args.select)
     args.add_select = ','.join(args.add_select)
     args.add_ignore = ','.join(args.add_ignore)
-    if not (args.ignore or args.select) and args.convention == 'ament':
+    if not args.ignore and not args.select and args.convention == 'ament':
         args.ignore = ','.join(_ament_ignore)
 
     excludes = [os.path.abspath(e) for e in args.excludes]
     report = generate_pep257_report(args.paths, excludes, args.ignore, args.select,
                                     args.convention, args.add_ignore, args.add_select)
-    error_count = sum(len(r[1]) for r in report)
-
-    # print summary
-    if not error_count:
-        print('No problems found')
-        rc = 0
-    else:
+    if error_count := sum(len(r[1]) for r in report):
         print('%d errors' % error_count, file=sys.stderr)
         rc = 1
 
+    else:
+        print('No problems found')
+        rc = 0
     # generate xunit file
     if args.xunit_file:
         folder_name = os.path.basename(os.path.dirname(args.xunit_file))
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -186,14 +183,14 @@ def generate_pep257_report(paths, excludes, ignore, select, convention, add_igno
 
     report = []
 
-    files_dict = {}
-    for filename, checked_codes, ignore_decorators in files_to_check:
-        if _filename_in_excludes(filename, excludes):
-            continue
-        files_dict[filename] = {
+    files_dict = {
+        filename: {
             'select': checked_codes,
             'ignore_decorators': ignore_decorators,
         }
+        for filename, checked_codes, ignore_decorators in files_to_check
+        if not _filename_in_excludes(filename, excludes)
+    }
 
     for filename in sorted(files_dict.keys()):
         print('checking', filename)
@@ -218,14 +215,14 @@ def generate_pep257_report(paths, excludes, ignore, select, convention, add_igno
                     'linenumber': '-',
                     'message': 'invalid syntax in file',
                 })
-                print('%s: invalid syntax' % filename, file=sys.stderr)
+                print(f'{filename}: invalid syntax', file=sys.stderr)
             else:
                 errors.append({
                     'category': 'unknown',
                     'linenumber': '-',
                     'message': str(pep257_error),
                 })
-                print('%s: %s' % (filename, pep257_error), file=sys.stderr)
+                print(f'{filename}: {pep257_error}', file=sys.stderr)
         report.append((filename, errors))
     return report
 

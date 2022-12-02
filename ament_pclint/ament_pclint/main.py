@@ -89,13 +89,13 @@ def main(argv=sys.argv[1:]):
         return 1
 
     exec_name = 'pclp64'  # Name of Windows executable, other OSes have a suffix
-    if sys.platform == 'linux':
-        exec_name += '_linux'
-    elif sys.platform == 'darwin':
+    if sys.platform == 'darwin':
         exec_name += '_osx'
+    elif sys.platform == 'linux':
+        exec_name += '_linux'
     pclint_bin = find_executable(exec_name)
     if not pclint_bin:
-        print("Could not find pclint executable '{}'".format(exec_name), file=sys.stderr)
+        print(f"Could not find pclint executable '{exec_name}'", file=sys.stderr)
         return 1
 
     if args.pclint_config_file:
@@ -126,7 +126,7 @@ def main(argv=sys.argv[1:]):
         for path in paths:
             include_folder = os.path.join(path, 'include')
             if os.path.exists(include_folder):
-                base_cmd.extend(['-i"{}"'.format(include_folder)])
+                base_cmd.extend([f'-i"{include_folder}"'])
 
     # Add compiler definitions from arguments
     for definition in (args.compiler_definitions or []):
@@ -173,8 +173,7 @@ def main(argv=sys.argv[1:]):
     try:
         root = ElementTree.fromstring(aggregate_xml)
     except ElementTree.ParseError as e:
-        print('Invalid XML in pclint output: %s' % str(e),
-              file=sys.stderr)
+        print(f'Invalid XML in pclint output: {str(e)}', file=sys.stderr)
         return 1
 
     # output errors
@@ -197,29 +196,27 @@ def main(argv=sys.argv[1:]):
             print('[%(filename)s:%(line)d]: (%(severity)s: %(id)s) %(msg)s' % data,
                   file=sys.stderr)
 
-    # output summary
-    error_count = sum(len(r) for r in report.values())
-    if not error_count:
-        print('No problems found')
-        rc = 0
-    else:
+    if error_count := sum(len(r) for r in report.values()):
         print('%d errors' % error_count, file=sys.stderr)
         if args.debug:
             for r in result:
                 print(r)
         rc = 1
 
+    else:
+        print('No problems found')
+        rc = 0
     # generate xunit file
     if args.xunit_file:
         folder_name = os.path.basename(os.path.dirname(args.xunit_file))
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -303,7 +300,7 @@ def get_files(paths, extensions):
                 # select files by extension
                 for filename in sorted(filenames):
                     _, ext = os.path.splitext(filename)
-                    if ext in ('.%s' % e for e in extensions):
+                    if ext in (f'.{e}' for e in extensions):
                         files.append(os.path.join(dirpath, filename))
         if os.path.isfile(path):
             files.append(path)
@@ -330,9 +327,7 @@ def get_xunit_content(report, testname, elapsed):
 """ % data
 
     for filename in sorted(report.keys()):
-        errors = report[filename]
-
-        if errors:
+        if errors := report[filename]:
             # report each pclint error as a failing testcase
             for error in errors:
                 data = {

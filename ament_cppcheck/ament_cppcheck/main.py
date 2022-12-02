@@ -43,10 +43,10 @@ def get_cppcheck_version(cppcheck_bin):
     output = output.decode().strip()
     tokens = output.split()
     if len(tokens) not in (2, 3):
-        raise RuntimeError("unexpected cppcheck version string '{}'".format(output))
+        raise RuntimeError(f"unexpected cppcheck version string '{output}'")
 
     if tokens[0] != 'Cppcheck':
-        raise RuntimeError("unexpected cppcheck version name '{}'".format(output))
+        raise RuntimeError(f"unexpected cppcheck version name '{output}'")
 
     return tokens[1]
 
@@ -123,23 +123,24 @@ def main(argv=sys.argv[1:]):
         pass
 
     # detect cppcheck 1.88 or 2.x which are much too slow
-    if 'AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS' not in os.environ:
-        if cppcheck_version == '1.88' or cppcheck_version.startswith('2.'):
-            print(
-                f'cppcheck {cppcheck_version} has known performance issues and therefore will not '
-                'be used, set the AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS environment variable to override this.',
-                file=sys.stderr,
+    if 'AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS' not in os.environ and (
+        cppcheck_version == '1.88' or cppcheck_version.startswith('2.')
+    ):
+        print(
+            f'cppcheck {cppcheck_version} has known performance issues and therefore will not '
+            'be used, set the AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS environment variable to override this.',
+            file=sys.stderr,
+        )
+
+        if args.xunit_file:
+            report = {input_file: [] for input_file in files}
+            write_xunit_file(
+                args.xunit_file, report, time.time() - start_time,
+                skip=f'cppcheck {cppcheck_version} performance issues'
             )
+            return 0
 
-            if args.xunit_file:
-                report = {input_file: [] for input_file in files}
-                write_xunit_file(
-                    args.xunit_file, report, time.time() - start_time,
-                    skip=f'cppcheck {cppcheck_version} performance issues'
-                )
-                return 0
-
-            return 188
+        return 188
 
     # invoke cppcheck
     cmd = [cppcheck_bin,
@@ -158,7 +159,7 @@ def main(argv=sys.argv[1:]):
     for include_dir in (args.include_dirs or []):
         cmd.extend(['-I', include_dir])
     for exclude in (args.exclude or []):
-        cmd.extend(['--suppress=*:' + exclude])
+        cmd.extend([f'--suppress=*:{exclude}'])
     if jobs:
         cmd.extend(['-j', '%d' % jobs])
     cmd.extend(files)
@@ -173,8 +174,7 @@ def main(argv=sys.argv[1:]):
     try:
         root = ElementTree.fromstring(xml)
     except ElementTree.ParseError as e:
-        print('Invalid XML in cppcheck output: %s' % str(e),
-              file=sys.stderr)
+        print(f'Invalid XML in cppcheck output: {str(e)}', file=sys.stderr)
         return 1
 
     # output errors
@@ -191,7 +191,7 @@ def main(argv=sys.argv[1:]):
             'severity': error.get('severity'),
             'msg': error.get('verbose'),
         }
-        for key in report.keys():
+        for key in report:
             if os.path.samefile(key, filename):
                 filename = key
                 break
@@ -205,15 +205,13 @@ def main(argv=sys.argv[1:]):
             print('[%(filename)s:%(line)d]: (%(severity)s: %(id)s) %(msg)s' % data,
                 file=sys.stderr)
 
-    # output summary
-    error_count = sum(len(r) for r in report.values())
-    if not error_count:
-        print('No problems found')
-        rc = 0
-    else:
+    if error_count := sum(len(r) for r in report.values()):
         print('%d errors' % error_count, file=sys.stderr)
         rc = 1
 
+    else:
+        print('No problems found')
+        rc = 0
     # generate xunit file
     if args.xunit_file:
         write_xunit_file(args.xunit_file, report, time.time() - start_time)
@@ -244,7 +242,7 @@ def get_files(paths, extensions):
                 # select files by extension
                 for filename in sorted(filenames):
                     _, ext = os.path.splitext(filename)
-                    if ext in ['.%s' % e for e in extensions]:
+                    if ext in [f'.{e}' for e in extensions]:
                         files.append(os.path.join(dirpath, filename))
         if os.path.isfile(path):
             files.append(path)
@@ -346,11 +344,11 @@ def write_xunit_file(xunit_file, report, duration, skip=None):
     file_name = os.path.basename(xunit_file)
     suffix = '.xml'
     if file_name.endswith(suffix):
-        file_name = file_name[0:-len(suffix)]
+        file_name = file_name[:-len(suffix)]
         suffix = '.xunit'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
-    testname = '%s.%s' % (folder_name, file_name)
+            file_name = file_name[:-len(suffix)]
+    testname = f'{folder_name}.{file_name}'
 
     xml = get_xunit_content(report, testname, duration, skip)
     path = os.path.dirname(os.path.abspath(xunit_file))

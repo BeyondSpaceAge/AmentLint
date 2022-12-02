@@ -33,7 +33,7 @@ class CopyrightDescriptor:
     def __str__(self):
         s = self.name
         if self.year_range:
-            s += ' (%s)' % self.year_range
+            s += f' ({self.year_range})'
         return s
 
 
@@ -174,10 +174,14 @@ def parse_file(path):
 
 def determine_filetype(path):
     basename = os.path.basename(path)
-    for filetype, filename in ALL_FILETYPES.items():
-        if basename == filename:
-            return filetype
-    return SOURCE_FILETYPE
+    return next(
+        (
+            filetype
+            for filetype, filename in ALL_FILETYPES.items()
+            if basename == filename
+        ),
+        SOURCE_FILETYPE,
+    )
 
 
 def search_copyright_information(content):
@@ -185,8 +189,8 @@ def search_copyright_information(content):
         return [], content
     # regex for matching years or year ranges (yyyy-yyyy) separated by colons
     year = r'\d{4}'
-    year_range = '%s-%s' % (year, year)
-    year_or_year_range = '(?:%s|%s)' % (year, year_range)
+    year_range = f'{year}-{year}'
+    year_or_year_range = f'(?:{year}|{year_range})'
     pattern = r'^[^\n\r]?\s*(?:\\copyright\s*)?' \
               r'copyright(?:\s+\(c\))?\s+(%s(?:,\s*%s)*),?\s+([^\n\r]+)$' % \
         (year_or_year_range, year_or_year_range)
@@ -231,9 +235,7 @@ def get_index_of_next_line(content, index):
     if not indices:
         return len(content)
     index = min(indices)
-    if index == index_rn:
-        return index + 2
-    return index + 1
+    return index + 2 if index == index_rn else index + 1
 
 
 def is_comment_line(content, index):
@@ -268,7 +270,7 @@ def get_comment_block(content, index):
     match = regex.search(content, index)
     if not match:
         return None, None
-    comment_token = match.group(1)
+    comment_token = match[1]
     start_index = match.start(1)
 
     end_index = start_index
@@ -346,9 +348,26 @@ def split_template(sections, separators):
     if type(sections) != list:
         return split_template([sections], separators)
     elif len(separators) > 1:
-        return sum([split_template([section], separators[0:1]) for section
-                    in sum([split_template([section], separators[1:])
-                            for section in sections], [])], [])
+        return sum(
+            (
+                split_template([section], separators[:1])
+                for section in sum(
+                    (
+                        split_template([section], separators[1:])
+                        for section in sections
+                    ),
+                    [],
+                )
+            ),
+            [],
+        )
+
     else:
-        return list(filter(lambda s: len(s) > 0,
-                           sum([section.split(separators[0]) for section in sections], [])))
+        return list(
+            filter(
+                lambda s: len(s) > 0,
+                sum(
+                    (section.split(separators[0]) for section in sections), []
+                ),
+            )
+        )

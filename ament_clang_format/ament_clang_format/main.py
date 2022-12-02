@@ -85,7 +85,7 @@ def main(argv=sys.argv[1:]):
     ]
 
     if args.clang_format_version:
-        bin_names = ['clang-format-' + args.clang_format_version]
+        bin_names = [f'clang-format-{args.clang_format_version}']
 
     clang_format_bin = find_executable(bin_names)
     if not clang_format_bin:
@@ -100,9 +100,7 @@ def main(argv=sys.argv[1:]):
         content = h.read()
     data = yaml.safe_load(content)
     style = yaml.dump(data, default_flow_style=True, width=float('inf'))
-    cmd = [clang_format_bin,
-           '-output-replacements-xml',
-           '-style=%s' % style]
+    cmd = [clang_format_bin, '-output-replacements-xml', f'-style={style}']
     cmd.extend(files)
     try:
         output = subprocess.check_output(cmd)
@@ -113,22 +111,17 @@ def main(argv=sys.argv[1:]):
         return 1
 
     # output errors
-    report = {}
-    for filename in files:
-        report[filename] = []
-
+    report = {filename: [] for filename in files}
     xmls = output.split(b"<?xml version='1.0'?>")[1:]
     changed_files = []
     for filename, xml in zip(files, xmls):
         try:
             root = ElementTree.fromstring(xml)
         except ElementTree.ParseError as e:
-            print('Invalid XML in clang format output: %s' % str(e),
-                  file=sys.stderr)
+            print(f'Invalid XML in clang format output: {str(e)}', file=sys.stderr)
             return 1
 
-        replacements = root.findall('replacement')
-        if replacements:
+        if replacements := root.findall('replacement'):
             changed_files.append(filename)
             if not args.reformat:
                 print("Code style divergence in file '%s':" % filename,
@@ -160,9 +153,12 @@ def main(argv=sys.argv[1:]):
                 subcontent = content[
                     index_of_line_start:index_of_line_end]
                 data['deletion'] = subcontent
-                data['addition'] = subcontent[0:data['offset_in_line']] + \
-                    data['replacement'] + \
-                    subcontent[data['offset_in_line'] + data['length']:]
+                data['addition'] = (
+                    subcontent[: data['offset_in_line']]
+                    + data['replacement']
+                    + subcontent[data['offset_in_line'] + data['length'] :]
+                )
+
 
                 # make common control characters visible
                 mapping = {'\n': '\\n', '\r': '\\r', '\t': '\\t'}
@@ -177,9 +173,13 @@ def main(argv=sys.argv[1:]):
 
                 # format deletion / addition as unified diff
                 data['deletion'] = '\n'.join(
-                    ['- ' + line for line in data['deletion'].split('\n')])
+                    [f'- {line}' for line in data['deletion'].split('\n')]
+                )
+
                 data['addition'] = '\n'.join(
-                    ['+ ' + line for line in data['addition'].split('\n')])
+                    [f'+ {line}' for line in data['addition'].split('\n')]
+                )
+
 
                 report[filename].append(data)
 
@@ -200,9 +200,7 @@ def main(argv=sys.argv[1:]):
 
     # overwrite original with reformatted files
     if args.reformat and changed_files:
-        cmd = [clang_format_bin,
-               '-i',
-               '-style=%s' % style]
+        cmd = [clang_format_bin, '-i', f'-style={style}']
         cmd.extend(files)
         try:
             subprocess.check_call(cmd)
@@ -213,7 +211,7 @@ def main(argv=sys.argv[1:]):
             return 1
 
     # output summary
-    file_count = sum(1 if report[k] else 0 for k in report.keys())
+    file_count = sum(1 if report[k] else 0 for k in report)
     replacement_count = sum(len(r) for r in report.values())
     if not file_count:
         print('No problems found')
@@ -229,11 +227,11 @@ def main(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -270,7 +268,7 @@ def get_files(paths, extensions):
                 # select files by extension
                 for filename in sorted(filenames):
                     _, ext = os.path.splitext(filename)
-                    if ext in ('.%s' % e for e in extensions):
+                    if ext in (f'.{e}' for e in extensions):
                         files.append(os.path.join(dirpath, filename))
         if os.path.isfile(path):
             files.append(path)
@@ -294,7 +292,7 @@ def find_index_of_line_end(data, offset):
 
 
 def get_line_number(data, offset):
-    return data[0:offset].count('\n') + data[0:offset].count('\r') + 1
+    return data[:offset].count('\n') + data[:offset].count('\r') + 1
 
 
 def get_xunit_content(report, testname, elapsed):
@@ -317,28 +315,36 @@ def get_xunit_content(report, testname, elapsed):
 """ % data
 
     for filename in sorted(report.keys()):
-        replacements = report[filename]
-
-        if replacements:
+        if replacements := report[filename]:
             # report each replacement as a failing testcase
             for replacement in replacements:
                 data = {
                     'quoted_location': quoteattr(
-                        '%s:%d:%d' % (
-                            filename, replacement['line_no'],
-                            replacement['offset_in_line'])),
+                        '%s:%d:%d'
+                        % (
+                            filename,
+                            replacement['line_no'],
+                            replacement['offset_in_line'],
+                        )
+                    ),
                     'testname': testname,
                     'quoted_message': quoteattr(
-                        'Replace [%s] with [%s]' %
-                        (replacement['original'], replacement['replacement'])),
-                    'cdata': '\n'.join([
-                        '%s:%d:%d' % (
-                            filename, replacement['line_no'],
-                            replacement['offset_in_line']),
-                        replacement['deletion'],
-                        replacement['addition'],
-                    ]),
+                        f"Replace [{replacement['original']}] with [{replacement['replacement']}]"
+                    ),
+                    'cdata': '\n'.join(
+                        [
+                            '%s:%d:%d'
+                            % (
+                                filename,
+                                replacement['line_no'],
+                                replacement['offset_in_line'],
+                            ),
+                            replacement['deletion'],
+                            replacement['addition'],
+                        ]
+                    ),
                 }
+
                 xml += """  <testcase
     name=%(quoted_location)s
     classname="%(testname)s"

@@ -98,15 +98,14 @@ class _CMakeLintState(object):
         else:
             raise ValueError('Filters should be a list or a comma separated string')
         for f in self.filters:
-            if f.startswith('-') or f.startswith('+'):
-                allowed = False
-                for c in self.allowed_categories:
-                    if c.startswith(f[1:]):
-                        allowed = True
-                if not allowed:
-                    raise ValueError('Filter not allowed: %s'%f)
-            else:
+            if not f.startswith('-') and not f.startswith('+'):
                 raise ValueError('Filter should start with - or +')
+            allowed = False
+            for c in self.allowed_categories:
+                if c.startswith(f[1:]):
+                    allowed = True
+            if not allowed:
+                raise ValueError(f'Filter not allowed: {f}')
 
     def SetSpaces(self, spaces):
         self.spaces = int(spaces.strip())
@@ -181,7 +180,7 @@ class CleansedLines(object):
         self.lines = [CleanComments(line) for line in lines]
 
     def LineNumbers(self):
-        return range(0, len(self.lines))
+        return range(len(self.lines))
 
 def ShouldPrintError(category):
     should_print = True
@@ -226,15 +225,12 @@ def ContainsCommand(line):
     return _RE_COMMAND.match(line)
 
 def GetCommand(line):
-    match = _RE_COMMAND.match(line)
-    if match:
-        return match.group(1)
-    return ''
+    return match.group(1) if (match := _RE_COMMAND.match(line)) else ''
 
 def IsCommandMixedCase(command):
     lower = command.lower()
     upper = command.upper()
-    return not (command == lower or command == upper)
+    return command not in [lower, upper]
 
 def IsCommandUpperCase(command):
     upper = command.upper()
@@ -301,11 +297,14 @@ def CheckRepeatLogic(filename, linenumber, clean_lines, errors):
     line = clean_lines.lines[linenumber]
     for cmd in _logic_commands:
         if re.search(r'\b%s\b'%cmd, line.lower()):
-            m = _RE_LOGIC_CHECK.search(line)
-            if m:
-                errors(filename, linenumber, 'readability/logic',
-                        'Expression repeated inside %s; '
-                        'better to use only %s()'%(cmd, m.group(1)))
+            if m := _RE_LOGIC_CHECK.search(line):
+                errors(
+                    filename,
+                    linenumber,
+                    'readability/logic',
+                    f'Expression repeated inside {cmd}; better to use only {m.group(1)}()',
+                )
+
             break
 
 def CheckIndent(filename, linenumber, clean_lines, errors):
@@ -337,17 +336,19 @@ def CheckStyle(filename, linenumber, clean_lines, errors):
     CheckRepeatLogic(filename, linenumber, clean_lines, errors)
 
 def CheckFileName(filename, errors):
-    name_match = re.match(r'Find(.*)\.cmake', os.path.basename(filename))
-    if name_match:
-        package = name_match.group(1)
+    if name_match := re.match(r'Find(.*)\.cmake', os.path.basename(filename)):
+        package = name_match[1]
         if not package.isupper():
-            errors(filename, 0, 'convention/filename',
-                    'Find modules should use uppercase names; '
-                    'consider using Find' + package.upper() + '.cmake')
-    else:
-        if filename.lower() == 'cmakelists.txt' and filename != 'CMakeLists.txt':
-            errors(filename, 0, 'convention/filename',
-                    'File should be called CMakeLists.txt')
+            errors(
+                filename,
+                0,
+                'convention/filename',
+                f'Find modules should use uppercase names; consider using Find{package.upper()}.cmake',
+            )
+
+    elif filename.lower() == 'cmakelists.txt' and filename != 'CMakeLists.txt':
+        errors(filename, 0, 'convention/filename',
+                'File should be called CMakeLists.txt')
 
 def IsFindPackage(filename):
     return os.path.basename(filename).startswith('Find') and filename.endswith('.cmake')
@@ -366,8 +367,7 @@ def GetCommandArgument(linenumber, clean_lines):
     return ''
 
 def CheckFindPackage(filename, linenumber, clean_lines, errors):
-    cmd = GetCommand(clean_lines.lines[linenumber])
-    if cmd:
+    if cmd := GetCommand(clean_lines.lines[linenumber]):
         if cmd.lower() == 'include':
             var_name = GetCommandArgument(linenumber, clean_lines)
             _package_state.HaveIncluded(var_name)
@@ -406,12 +406,12 @@ def _ProcessFile(filename):
     lines = ['# Lines start at 1']
     have_cr = False
     if not IsValidFile(filename):
-        print('Ignoring file: ' + filename)
+        print(f'Ignoring file: {filename}')
         return
     global _package_state
     _package_state = _CMakePackageState()
     with open(filename) as f:
-        for l in f.readlines():
+        for l in f:
             l = l.rstrip('\n')
             if l.endswith('\r'):
                 have_cr = True
@@ -443,7 +443,7 @@ def PrintVersion():
 def PrintUsage(message):
     sys.stderr.write(_USAGE)
     if message:
-        sys.exit('FATAL ERROR: '+message)
+        sys.exit(f'FATAL ERROR: {message}')
     else:
         sys.exit(1)
 

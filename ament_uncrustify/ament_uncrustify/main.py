@@ -107,11 +107,7 @@ def main(argv=sys.argv[1:]):
             start_time = time.time()
 
         # replace language set to 'C++' with 'CPP' to be more consistent with uncrustify
-        if args.language == 'C++':
-            language_ = 'CPP'
-        else:
-            language_ = args.language
-
+        language_ = 'CPP' if args.language == 'C++' else args.language
         files_by_language = get_files(
             args.paths, {'C': c_extensions, 'CPP': cpp_extensions},
             exclude_patterns=args.exclude, language=language_)
@@ -178,7 +174,7 @@ def main(argv=sys.argv[1:]):
                 print('')
 
     # output summary
-    error_count = sum([1 if r[1] else 0 for r in report])
+    error_count = sum(1 if r[1] else 0 for r in report)
     if not error_count:
         print('No problems found')
         rc = 0
@@ -193,11 +189,11 @@ def main(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -243,7 +239,7 @@ def get_files(paths, extension_types, exclude_patterns=[], language=None):
                 # select files by extension
                 for filename in sorted(filenames):
                     _, ext = os.path.splitext(filename)
-                    language = extensions_with_dot_to_language.get(ext, None)
+                    language = extensions_with_dot_to_language.get(ext)
                     if language is not None:
                         filepath = os.path.join(dirpath, filename)
                         if os.path.realpath(filepath) not in excludes:
@@ -251,10 +247,9 @@ def get_files(paths, extension_types, exclude_patterns=[], language=None):
                                 os.path.normpath(os.path.join(dirpath, filename)))
         if os.path.isfile(path):
             _, ext = os.path.splitext(path)
-            language = extensions_with_dot_to_language.get(ext, None)
-            if language is not None:
-                if os.path.realpath(path) not in excludes:
-                    files[language].append(os.path.normpath(path))
+            language = extensions_with_dot_to_language.get(ext)
+            if language is not None and os.path.realpath(path) not in excludes:
+                files[language].append(os.path.normpath(path))
     return files
 
 
@@ -365,7 +360,7 @@ def invoke_uncrustify(
 
 def get_xunit_content(report, testname, elapsed):
     test_count = len(report)
-    error_count = sum([1 if r[1] else 0 for r in report])
+    error_count = sum(1 if r[1] else 0 for r in report)
     data = {
         'testname': testname,
         'test_count': test_count,
