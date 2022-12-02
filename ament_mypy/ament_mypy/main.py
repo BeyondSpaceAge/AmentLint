@@ -75,7 +75,7 @@ def main(argv: List[str] = sys.argv[1:]) -> int:
         start_time = time.time()
 
     if args.config_file and not os.path.exists(args.config_file):
-        print("Could not find config file '{}'".format(args.config_file), file=sys.stderr)
+        print(f"Could not find config file '{args.config_file}'", file=sys.stderr)
         return 1
 
     filenames = _get_files(args.paths)
@@ -101,16 +101,16 @@ def main(argv: List[str] = sys.argv[1:]) -> int:
 
     errors_parsed = _get_errors(normal_report)
 
-    print('\n{} files checked'.format(len(filenames)))
+    print(f'\n{len(filenames)} files checked')
     if not normal_report:
         print('No errors found')
     else:
-        print('{} errors'.format(len(errors_parsed)))
+        print(f'{len(errors_parsed)} errors')
 
     print(normal_report)
 
     print('\nChecked files:')
-    print(''.join(['\n* {}'.format(f) for f in filenames]))
+    print(''.join([f'\n* {f}' for f in filenames]))
 
     # generate xunit file
     if args.xunit_file:
@@ -122,7 +122,7 @@ def main(argv: List[str] = sys.argv[1:]) -> int:
             suffix = '.xunit'
             if file_name.endswith(suffix):
                 file_name = file_name[:-len(suffix)]
-        testname = '{}.{}'.format(folder_name, file_name)
+        testname = f'{folder_name}.{file_name}'
 
         xml = _get_xunit_content(errors_parsed, testname, filenames, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -137,19 +137,14 @@ def main(argv: List[str] = sys.argv[1:]) -> int:
 def _generate_mypy_report(paths: List[str],
                           config_file: Optional[str] = None,
                           cache_dir: str = os.devnull) -> Tuple[str, str, int]:
-    mypy_argv = []
-    mypy_argv.append('--cache-dir')
-    mypy_argv.append(str(cache_dir))
+    mypy_argv = ['--cache-dir', cache_dir]
     if cache_dir == os.devnull:
         mypy_argv.append('--no-incremental')
     if config_file:
-        mypy_argv.append('--config-file')
-        mypy_argv.append(str(config_file))
-    mypy_argv.append('--show-error-context')
-    mypy_argv.append('--show-column-numbers')
+        mypy_argv.extend(('--config-file', str(config_file)))
+    mypy_argv.extend(('--show-error-context', '--show-column-numbers'))
     mypy_argv += paths
-    res = mypy.api.run(mypy_argv)  # type: Tuple[str, str, int]
-    return res
+    return mypy.api.run(mypy_argv)
 
 
 def _get_xunit_content(errors: List[Match],
@@ -223,9 +218,12 @@ def _get_files(paths: List[str]) -> List[str]:
                 dirnames.sort()
 
                 # select files by extension
-                for filename in sorted(filenames):
-                    if filename.endswith('.py'):
-                        files.append(os.path.join(dirpath, filename))
+                files.extend(
+                    os.path.join(dirpath, filename)
+                    for filename in sorted(filenames)
+                    if filename.endswith('.py')
+                )
+
         elif os.path.isfile(path):
             files.append(path)
     return [os.path.normpath(f) for f in files]

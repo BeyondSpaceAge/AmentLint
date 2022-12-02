@@ -75,26 +75,24 @@ def main(argv=sys.argv[1:]):
         report.append((filename, reporter.errors))
         print('')
 
-    # output summary
-    error_count = sum(len(r[1]) for r in report)
-    if not error_count:
-        print('No problems found')
-        rc = 0
-    else:
+    if error_count := sum(len(r[1]) for r in report):
         print('%d errors' % error_count, file=sys.stderr)
         rc = 1
 
+    else:
+        print('No problems found')
+        rc = 0
     # generate xunit file
     if args.xunit_file:
         folder_name = os.path.basename(os.path.dirname(args.xunit_file))
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -119,9 +117,12 @@ def get_files(paths):
                 dirnames.sort()
 
                 # select files by extension
-                for filename in sorted(filenames):
-                    if filename.endswith('.py'):
-                        files.append(os.path.join(dirpath, filename))
+                files.extend(
+                    os.path.join(dirpath, filename)
+                    for filename in sorted(filenames)
+                    if filename.endswith('.py')
+                )
+
         if os.path.isfile(path):
             files.append(path)
     return [os.path.normpath(f) for f in files]
@@ -155,7 +156,7 @@ def get_xunit_content(report, testname, elapsed):
                     msg = error.message % error.message_args
                 except TypeError:
                     # this can happen if the line contains percent characters
-                    msg = error.message + ' ' + str(error.message_args)
+                    msg = f'{error.message} {str(error.message_args)}'
                 data = {
                     'quoted_name': quoteattr(
                         '%s (%s:%d)' % (

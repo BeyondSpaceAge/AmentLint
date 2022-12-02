@@ -136,11 +136,11 @@ def main(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -171,7 +171,7 @@ def get_files(paths, extensions, excludes=[]):
                     if filename in excludes:
                         continue
                     _, ext = os.path.splitext(filename)
-                    if ext not in ['.%s' % e for e in extensions]:
+                    if ext not in [f'.{e}' for e in extensions]:
                         continue
                     files.append(os.path.join(dirpath, filename))
         if os.path.isfile(path):
@@ -191,7 +191,7 @@ class CustomHandler(ContentHandler):
         if target != 'xml-model':
             return
 
-        root = ElementTree.fromstring('<data ' + data + '/>')
+        root = ElementTree.fromstring(f'<data {data}/>')
         self.xml_model_attributes.append(root.attrib)
 
     def startDocument(self):

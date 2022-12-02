@@ -46,7 +46,7 @@ def test_search_single_file_name():
 
 def test_exclude_file_name_incorrect():
     """Excluding a single file name should not work, all files found."""
-    excludes = [str('case.py')]
+    excludes = ['case.py']
     assert len(get_files([cases_path], extensions, excludes)) == 4
 
 

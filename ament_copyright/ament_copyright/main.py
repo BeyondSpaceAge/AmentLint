@@ -96,13 +96,13 @@ def main(argv=sys.argv[1:]):
     names = get_copyright_names()
     if args.list_copyright_names:
         for key in sorted(names.keys()):
-            print('%s: %s' % (key, names[key]))
+            print(f'{key}: {names[key]}')
         return 0
 
     licenses = get_licenses()
     if args.list_licenses:
         for key in sorted(licenses.keys()):
-            print('%s: %s' % (key, licenses[key].name))
+            print(f'{key}: {licenses[key].name}')
         return 0
 
     if args.xunit_file:
@@ -112,9 +112,9 @@ def main(argv=sys.argv[1:]):
     if not filenames:
         print('No repository roots and files found')
 
-    file_descriptors = {}
-    for filename in sorted(filenames):
-        file_descriptors[filename] = parse_file(filename)
+    file_descriptors = {
+        filename: parse_file(filename) for filename in sorted(filenames)
+    }
 
     if args.add_missing:
         name = names.get(args.add_missing[0], args.add_missing[0])
@@ -154,9 +154,8 @@ def main(argv=sys.argv[1:]):
                 has_error = True
 
             else:
-                message = 'copyright=%s, license=%s' % \
-                    (', '.join([str(c) for c in file_descriptor.copyrights]),
-                     file_descriptor.license_identifier)
+                message = f"copyright={', '.join([str(c) for c in file_descriptor.copyrights])}, license={file_descriptor.license_identifier}"
+
                 has_error = file_descriptor.license_identifier == UNKNOWN_IDENTIFIER
 
         elif file_descriptor.filetype in [CONTRIBUTING_FILETYPE, LICENSE_FILETYPE]:
@@ -176,33 +175,34 @@ def main(argv=sys.argv[1:]):
                 assert False, file_descriptor
 
         else:
-            assert False, 'Unknown filetype: ' + file_descriptor.filetype
+            assert False, f'Unknown filetype: {file_descriptor.filetype}'
 
         if args.verbose or has_error:
-            print('%s: %s' % (file_descriptor.path, message),
-                  file=sys.stderr if has_error else sys.stdout)
+            print(
+                f'{file_descriptor.path}: {message}',
+                file=sys.stderr if has_error else sys.stdout,
+            )
+
         report.append((file_descriptor.path, not has_error, message))
 
-    # output summary
-    error_count = len([r for r in report if not r[1]])
-    if not error_count:
-        print('No problems found, checked %d files' % len(report))
-        rc = 0
-    else:
+    if error_count := len([r for r in report if not r[1]]):
         print('%d errors, checked %d files' % (error_count, len(report)), file=sys.stderr)
         rc = 1
 
+    else:
+        print('No problems found, checked %d files' % len(report))
+        rc = 0
     # generate xunit file
     if args.xunit_file:
         folder_name = os.path.basename(os.path.dirname(args.xunit_file))
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -262,7 +262,7 @@ def add_missing_header(file_descriptors, name, license_, verbose):
                 h.write(license_.license_files[0])
 
         else:
-            assert False, 'Unknown filetype: ' + file_descriptor.filetype
+            assert False, f'Unknown filetype: {file_descriptor.filetype}'
 
 
 def add_copyright_year(file_descriptors, new_years, verbose):
@@ -435,22 +435,22 @@ def get_xunit_content(report, testname, elapsed):
             'testname': testname,
             'escaped_message': escape(message),
         }
-        if not no_error:
-            # report missing / unknown copyright / license as a failing testcase
-            xml += """  <testcase
+        xml += (
+            """  <testcase
+    name=%(quoted_filename)s
+    classname="%(testname)s"/>
+"""
+            % data
+            if no_error
+            else """  <testcase
     name=%(quoted_filename)s
     classname="%(testname)s"
   >
       <failure message="%(escaped_message)s"/>
   </testcase>
-""" % data
-
-        else:
-            # if there is a known copyright / license report a single successful test
-            xml += """  <testcase
-    name=%(quoted_filename)s
-    classname="%(testname)s"/>
-""" % data
+"""
+            % data
+        )
 
     # output list of checked files
     data = {

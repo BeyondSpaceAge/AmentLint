@@ -120,11 +120,11 @@ def main_with_errors(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -307,12 +307,10 @@ def get_error_type_counts(error_codes):
     # e.g. 'E261' is type 'E'
     error_types = sorted({e[0] for e in error_codes})
 
-    # Create dictionary of error code types and their counts
-    error_type_counts = {}
-    for error_type in error_types:
-        error_type_counts[error_type] = len([
-            e for e in error_codes if e.startswith(error_type)])
-    return error_type_counts
+    return {
+        error_type: len([e for e in error_codes if e.startswith(error_type)])
+        for error_type in error_types
+    }
 
 
 class CustomReport:

@@ -135,7 +135,7 @@ def main(argv=sys.argv[1:]):
                 content = h.read()
             data = yaml.safe_load(content)
             style = yaml.dump(data, default_flow_style=True, width=float('inf'))
-            cmd.append('--config=%s' % style)
+            cmd.append(f'--config={style}')
         if args.explain_config:
             cmd.append('--explain-config')
         if args.export_fixes:
@@ -147,20 +147,22 @@ def main(argv=sys.argv[1:]):
         if args.header_filter:
             cmd.append(args.header_filter)
         else:
-            cmd.append('include/%s/.*' % package_name)
+            cmd.append(f'include/{package_name}/.*')
         if args.quiet:
             cmd.append('--quiet')
         if args.system_headers:
             cmd.append('--system-headers')
 
         def is_gtest_source(file_name):
-            if(file_name == 'gtest_main.cc' or file_name == 'gtest-all.cc'
-               or file_name == 'gmock_main.cc' or file_name == 'gmock-all.cc'):
-                return True
-            return False
+            return file_name in [
+                'gtest_main.cc',
+                'gtest-all.cc',
+                'gmock_main.cc',
+                'gmock-all.cc',
+            ]
 
         def is_unittest_source(package, file_path):
-            return ('%s/test/' % package) in file_path
+            return f'{package}/test/' in file_path
 
         def start_subprocess(full_cmd):
             output = ''
@@ -228,13 +230,13 @@ def main(argv=sys.argv[1:]):
             # error found
             match = error_re.search(line)
             if match:
-                new_file = match.group(1)
+                new_file = match[1]
                 if current_file is not None:
                     report[current_file].append(copy.deepcopy(data))
                     data.clear()
                 current_file = new_file
-                line_num = match.group(2)
-                col_num = match.group(3)
+                line_num = match[2]
+                col_num = match[3]
                 error_msg = find_error_message(line)
                 data['line_no'] = line_num
                 data['offset_in_line'] = col_num
@@ -249,11 +251,11 @@ def main(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
         if not os.path.exists(path):
@@ -285,9 +287,12 @@ def get_compilation_db_files(paths):
                 dirnames.sort()
 
                 # select files by extension
-                for filename in filenames:
-                    if filename == 'compile_commands.json':
-                        files.append(os.path.join(dirpath, filename))
+                files.extend(
+                    os.path.join(dirpath, filename)
+                    for filename in filenames
+                    if filename == 'compile_commands.json'
+                )
+
         elif os.path.isfile(path):
             files.append(path)
     return [os.path.normpath(f) for f in files]
@@ -324,25 +329,32 @@ def get_xunit_content(report, testname, elapsed):
 """ % data
 
     for filename in sorted(report.keys()):
-        errors = report[filename]
-
-        if errors:
+        if errors := report[filename]:
             # report each replacement as a failing testcase
             for error in errors:
                 data = {
                     'quoted_location': quoteattr(
-                        '%s:%d:%d' % (
-                            filename, int(error['line_no']),
-                            int(error['offset_in_line']))),
+                        '%s:%d:%d'
+                        % (
+                            filename,
+                            int(error['line_no']),
+                            int(error['offset_in_line']),
+                        )
+                    ),
                     'testname': testname,
-                    'quoted_message': quoteattr(
-                        '%s' %
-                        error['error_msg']),
-                    'cdata': '\n'.join([
-                        '%s:%d:%d' % (
-                            filename, int(error['line_no']),
-                            int(error['offset_in_line']))])
+                    'quoted_message': quoteattr(f"{error['error_msg']}"),
+                    'cdata': '\n'.join(
+                        [
+                            '%s:%d:%d'
+                            % (
+                                filename,
+                                int(error['line_no']),
+                                int(error['offset_in_line']),
+                            )
+                        ]
+                    ),
                 }
+
                 if 'code_correct_rec' in data:
                     data['cdata'] += '\n'
                     data['cdata'] += data['code_correct_rec']

@@ -8,14 +8,18 @@ setup(
     version='0.13.2',
     packages=find_packages(exclude=['test']),
     data_files=[
-        ('share/' + package_name, ['package.xml']),
-        ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
+        (f'share/{package_name}', ['package.xml']),
+        (
+            'share/ament_index/resource_index/packages',
+            [f'resource/{package_name}'],
+        ),
     ],
     install_requires=['setuptools', 'pyyaml'],
-    package_data={'': [
-        'configuration/.clang-format',
-    ]},
+    package_data={
+        '': [
+            'configuration/.clang-format',
+        ]
+    },
     zip_safe=False,
     author='Dirk Thomas',
     author_email='dthomas@osrfoundation.org',

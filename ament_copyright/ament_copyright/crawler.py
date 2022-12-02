@@ -55,9 +55,12 @@ def get_files(paths, extensions, exclude_patterns, skip_package_level_setup_py=T
                         if os.path.realpath(filepath) not in excludes:
                             files[os.path.join(dirpath, filename)] = SOURCE_FILETYPE
 
-        if os.path.isfile(path) and match_filename(path, extensions):
-            if os.path.realpath(path) not in excludes:
-                files[path] = SOURCE_FILETYPE
+        if (
+            os.path.isfile(path)
+            and match_filename(path, extensions)
+            and os.path.realpath(path) not in excludes
+        ):
+            files[path] = SOURCE_FILETYPE
 
         if is_repository_root(os.path.dirname(path)):
             basename = os.path.basename(path)
@@ -79,7 +82,7 @@ def is_repository_root(path):
 def match_filename(filename, extensions):
     """Check if the filename has one of the extensions."""
     _, ext = os.path.splitext(filename)
-    return ext in ('.%s' % e for e in extensions)
+    return ext in (f'.{e}' for e in extensions)
 
 
 def add_files_for_all_filetypes(path, files):

@@ -102,8 +102,8 @@ def main(argv=sys.argv[1:]):
     argv = []
     # collect category based counts
     argv.append('--counting=detailed')
-    argv.append('--extensions=%s' % ','.join(extensions))
-    argv.append('--headers=%s' % ','.join(headers))
+    argv.append(f"--extensions={','.join(extensions)}")
+    argv.append(f"--headers={','.join(headers)}")
     filters = [
         # we do allow C++11
         '-build/c++11',
@@ -120,7 +120,7 @@ def main(argv=sys.argv[1:]):
     ]
     if args.filters:
         filters += args.filters.split(',')
-    argv.append('--filter=%s' % ','.join(filters))
+    argv.append(f"--filter={','.join(filters)}")
 
     argv.append('--linelength=%d' % args.linelength)
 
@@ -142,7 +142,7 @@ def main(argv=sys.argv[1:]):
         if args.root:
             root = os.path.abspath(args.root)
         if root:
-            root_arg = '--root=%s' % root
+            root_arg = f'--root={root}'
             arguments.append(root_arg)
             print("Using '%s' argument" % root_arg)
         else:
@@ -188,11 +188,11 @@ def main(argv=sys.argv[1:]):
         file_name = os.path.basename(args.xunit_file)
         suffix = '.xml'
         if file_name.endswith(suffix):
-            file_name = file_name[0:-len(suffix)]
+            file_name = file_name[:-len(suffix)]
             suffix = '.xunit'
             if file_name.endswith(suffix):
-                file_name = file_name[0:-len(suffix)]
-        testname = '%s.%s' % (folder_name, file_name)
+                file_name = file_name[:-len(suffix)]
+        testname = f'{folder_name}.{file_name}'
 
         xml = get_xunit_content(report, testname, time.time() - start_time)
         path = os.path.dirname(os.path.abspath(args.xunit_file))
@@ -225,14 +225,13 @@ def get_file_groups(paths, extensions, exclude_patterns):
                 # select files by extension
                 for filename in sorted(filenames):
                     _, ext = os.path.splitext(filename)
-                    if ext in ('.%s' % e for e in extensions):
+                    if ext in (f'.{e}' for e in extensions):
                         filepath = os.path.join(dirpath, filename)
                         if os.path.realpath(filepath) not in excludes:
                             append_file_to_group(groups, filepath)
 
-        if os.path.isfile(path):
-            if os.path.realpath(path) not in excludes:
-                append_file_to_group(groups, path)
+        if os.path.isfile(path) and os.path.realpath(path) not in excludes:
+            append_file_to_group(groups, path)
 
     return groups
 
@@ -248,11 +247,13 @@ def append_file_to_group(groups, path):
     subfolder_names = ['include', 'src', 'test']
     matches = [
         re.search(
-            '^(.+%s%s)%s' %
-            (re.escape(os.sep), re.escape(subfolder_name), re.escape(os.sep)), path)
-        for subfolder_name in subfolder_names]
-    match_groups = [match.group(1) for match in matches if match]
-    if match_groups:
+            f'^(.+{re.escape(os.sep)}{re.escape(subfolder_name)}){re.escape(os.sep)}',
+            path,
+        )
+        for subfolder_name in subfolder_names
+    ]
+
+    if match_groups := [match.group(1) for match in matches if match]:
         match_groups = [{'group_len': len(x), 'group': x} for x in match_groups]
         sorted_groups = sorted(match_groups, key=lambda k: k['group_len'])
         base_path = sorted_groups[-1]['group']
@@ -261,10 +262,7 @@ def append_file_to_group(groups, path):
     # try to find repository root
     repo_root = None
     p = path
-    while p and repo_root is None:
-        # abort if root is reached
-        if os.path.dirname(p) == p:
-            break
+    while p and repo_root is None and os.path.dirname(p) != p:
         p = os.path.dirname(p)
         for marker in ['.git', '.hg', '.svn']:
             if os.path.exists(os.path.join(p, marker)):
@@ -308,12 +306,12 @@ def get_xunit_content(report, testname, elapsed):
                 linenum = str(error['linenum']) if error['linenum'] is not None else 'None'
                 data = {
                     'quoted_name': quoteattr(
-                        '%s [%s] (%s:%s)' % (
-                            error['category'], error['confidence'],
-                            filename, linenum)),
+                        f"{error['category']} [{error['confidence']}] ({filename}:{linenum})"
+                    ),
                     'testname': testname,
                     'quoted_message': quoteattr(error['message']),
                 }
+
                 xml += """  <testcase
     name=%(quoted_name)s
     classname="%(testname)s"
